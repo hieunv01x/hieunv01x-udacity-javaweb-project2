@@ -5,11 +5,14 @@ import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.methodOn;
 
 import com.udacity.vehicles.domain.car.Car;
+import com.udacity.vehicles.service.CarNotFoundException;
 import com.udacity.vehicles.service.CarService;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.stream.Collectors;
+import javax.annotation.Resource;
+import javax.annotation.Resources;
 import javax.validation.Valid;
 
 import org.springframework.hateoas.Resource;
@@ -63,7 +66,14 @@ class CarController {
          * TODO: Use the `assembler` on that car and return the resulting output.
          *   Update the first line as part of the above implementing.
          */
-        return assembler.toResource(new Car());
+        Car car = new Car();
+        try {
+            car = carService.findById(id);
+        } catch (CarNotFoundException carNotFoundException) {
+            carNotFoundException.getMessage();
+        }
+
+        return assembler.toResource(car);
     }
 
     /**
@@ -79,8 +89,13 @@ class CarController {
          * TODO: Use the `assembler` on that saved car and return as part of the response.
          *   Update the first line as part of the above implementing.
          */
-        Resource<Car> resource = assembler.toResource(new Car());
-        return ResponseEntity.created(new URI(resource.getId().expand().getHref())).body(resource);
+        try {
+            carService.findById(car.getId());
+        } catch (CarNotFoundException carNotFoundException) {
+            car.setId(null);
+        }
+        carService.save(car);
+        return ResponseEntity.created(URI.create("/cars/" + car.getId())).build();
     }
 
     /**
@@ -97,7 +112,14 @@ class CarController {
          * TODO: Use the `assembler` on that updated car and return as part of the response.
          *   Update the first line as part of the above implementing.
          */
-        Resource<Car> resource = assembler.toResource(new Car());
+        try {
+            car.setId(carService.findById(id).getId()) ;
+            carService.save(car);
+        } catch (CarNotFoundException carNotFoundException) {
+            carNotFoundException.getMessage();
+        }
+
+        Resource<Car> resource = assembler.toResource(car);
         return ResponseEntity.ok(resource);
     }
 
@@ -111,6 +133,13 @@ class CarController {
         /**
          * TODO: Use the Car Service to delete the requested vehicle.
          */
-        return ResponseEntity.noContent().build();
+        try {
+            carService.delete(id);
+        } catch (CarNotFoundException carNotFoundException) {
+            carNotFoundException.getMessage();
+            return ResponseEntity.noContent().build();
+        }
+
+        return ResponseEntity.ok("Car is deleted");
     }
 }

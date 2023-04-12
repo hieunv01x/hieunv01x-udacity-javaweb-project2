@@ -1,18 +1,12 @@
 package com.udacity.vehicles.api;
 
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.udacity.vehicles.client.maps.MapsClient;
-import com.udacity.vehicles.client.prices.PriceClient;
 import com.udacity.vehicles.domain.Condition;
 import com.udacity.vehicles.domain.Location;
 import com.udacity.vehicles.domain.car.Car;
@@ -30,7 +24,9 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.json.JacksonTester;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.web.server.LocalServerPort;
+import org.springframework.http.*;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -38,7 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * Implements testing of the CarController class.
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @AutoConfigureJsonTesters
 public class CarControllerTest {
@@ -49,14 +45,14 @@ public class CarControllerTest {
     @Autowired
     private JacksonTester<Car> json;
 
+    @Autowired
+    private TestRestTemplate testRestTemplate;
+
     @MockBean
     private CarService carService;
 
-    @MockBean
-    private PriceClient priceClient;
-
-    @MockBean
-    private MapsClient mapsClient;
+    @LocalServerPort
+    private int port;
 
     /**
      * Creates pre-requisites for testing, such as an example car.
@@ -86,6 +82,41 @@ public class CarControllerTest {
     }
 
     /**
+     * Tests for successful update of a car in the system
+     * @throws Exception when car update fails in the system
+     */
+    @Test
+    public void updateCar() throws Exception {
+        Car car = getCar();
+        mvc.perform(post(new URI("/cars"))
+                        .content(json.write(car).getJson())
+                        .contentType(MediaType.APPLICATION_JSON_UTF8)
+                        .accept(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(status().isCreated());
+
+        Details detailsUpdate = new Details();
+        detailsUpdate.setManufacturer(car.getDetails().getManufacturer());
+        detailsUpdate.setModel("BMW X7");
+        detailsUpdate.setMileage(6500);
+        detailsUpdate.setExternalColor("Black");
+        detailsUpdate.setBody("SUV");
+        detailsUpdate.setEngine("4.4L V8");
+        detailsUpdate.setFuelType("Gasoline");
+        detailsUpdate.setModelYear(2022);
+        detailsUpdate.setProductionYear(2022);
+        detailsUpdate.setNumberOfDoors(7);
+
+        Car carUpdate = car;
+        carUpdate.setDetails(detailsUpdate);
+        carUpdate.setCondition(Condition.NEW);
+
+        mvc.perform(post(new URI("/cars"))
+                        .content(json.write(carUpdate).getJson())
+                        .contentType(MediaType.APPLICATION_JSON_UTF8)
+                        .accept(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(status().isCreated());
+    }
+    /**
      * Tests if the read operation appropriately returns a list of vehicles.
      * @throws Exception if the read operation of the vehicle list fails
      */
@@ -97,6 +128,16 @@ public class CarControllerTest {
          *   below (the vehicle will be the first in the list).
          */
 
+        Car car = getCar();
+        mvc.perform(post(new URI("/cars"))
+                        .content(json.write(car).getJson())
+                        .contentType(MediaType.APPLICATION_JSON_UTF8)
+                        .accept(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(status().isCreated());
+
+        ResponseEntity<?> response =  this.testRestTemplate
+                .exchange("http://localhost:"+ port + "/cars/", HttpMethod.GET, new HttpEntity<>(""), String.class);
+        assertThat(response.getStatusCode(), equalTo(HttpStatus.OK));
     }
 
     /**
@@ -109,6 +150,16 @@ public class CarControllerTest {
          * TODO: Add a test to check that the `get` method works by calling
          *   a vehicle by ID. This should utilize the car from `getCar()` below.
          */
+
+        Car car = getCar();
+        mvc.perform(post(new URI("/cars"))
+                            .content(json.write(car).getJson())
+                            .contentType(MediaType.APPLICATION_JSON_UTF8)
+                            .accept(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(status().isCreated());
+        ResponseEntity<?> response = this.testRestTemplate
+                .exchange("http://localhost:"+ port + "/cars/1", HttpMethod.GET, new HttpEntity<>(""), String.class);
+        assertThat(response.getStatusCode(), equalTo(HttpStatus.OK));
     }
 
     /**
@@ -122,6 +173,16 @@ public class CarControllerTest {
          *   when the `delete` method is called from the Car Controller. This
          *   should utilize the car from `getCar()` below.
          */
+
+        Car car = getCar();
+        mvc.perform(post(new URI("/cars"))
+                        .content(json.write(car).getJson())
+                        .contentType(MediaType.APPLICATION_JSON_UTF8)
+                        .accept(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(status().isCreated());
+        ResponseEntity<?> response = this.testRestTemplate
+                .exchange("http://localhost:"+ port + "/cars/1", HttpMethod.DELETE, new HttpEntity<>(""), String.class);
+        assertThat(response.getStatusCode(), equalTo(HttpStatus.OK));
     }
 
     /**

@@ -1,9 +1,18 @@
 package com.udacity.vehicles.service;
 
+import com.udacity.vehicles.client.prices.PriceClient;
+import com.udacity.vehicles.domain.Location;
 import com.udacity.vehicles.domain.car.Car;
 import com.udacity.vehicles.domain.car.CarRepository;
 import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+
+import javax.transaction.Transactional;
 
 /**
  * Implements the car service create, read, update or delete
@@ -15,12 +24,21 @@ public class CarService {
 
     private final CarRepository repository;
 
-    public CarService(CarRepository repository) {
-        /**
+    private static final Logger log = LoggerFactory.getLogger(PriceClient.class);
+
+    @Qualifier("maps")
+    private final WebClient webClient;
+
+    private final PriceClient priceClient;
+    public CarService(CarRepository repository,
+                      @Qualifier("maps") WebClient webClient , PriceClient priceClient) {
+        /*
          * TODO: Add the Maps and Pricing Web Clients you create
          *   in `VehiclesApiApplication` as arguments and set them here.
          */
         this.repository = repository;
+        this.webClient = webClient;
+        this.priceClient = priceClient;
     }
 
     /**
@@ -37,23 +55,24 @@ public class CarService {
      * @return the requested car's information, including location and price
      */
     public Car findById(Long id) {
-        /**
+
+        /*
          * TODO: Find the car by ID from the `repository` if it exists.
          *   If it does not exist, throw a CarNotFoundException
          *   Remove the below code as part of your implementation.
          */
-        Car car = new Car();
+        Car car = repository.findById(id).orElseThrow(CarNotFoundException::new);
 
-        /**
+        /*
          * TODO: Use the Pricing Web client you create in `VehiclesApiApplication`
          *   to get the price based on the `id` input'
          * TODO: Set the price of the car
          * Note: The car class file uses @transient, meaning you will need to call
          *   the pricing service each time to get the price.
          */
+        car.setPrice(priceClient.getPrice(car.getId()));
 
-
-        /**
+        /*
          * TODO: Use the Maps Web client you create in `VehiclesApiApplication`
          *   to get the address for the vehicle. You should access the location
          *   from the car object and feed it to the Maps service.
@@ -61,7 +80,8 @@ public class CarService {
          * Note: The Location class file also uses @transient for the address,
          * meaning the Maps service needs to be called each time for the address.
          */
-
+        Location location = getLocation(car.getLocation().getLat(), car.getLocation().getLon());
+        car.setLocation(location);
 
         return car;
     }
@@ -75,6 +95,7 @@ public class CarService {
         if (car.getId() != null) {
             return repository.findById(car.getId())
                     .map(carToBeUpdated -> {
+                        carToBeUpdated.setCondition(car.getCondition());
                         carToBeUpdated.setDetails(car.getDetails());
                         carToBeUpdated.setLocation(car.getLocation());
                         return repository.save(carToBeUpdated);
@@ -88,17 +109,42 @@ public class CarService {
      * Deletes a given car by ID
      * @param id the ID number of the car to delete
      */
+    @Transactional
     public void delete(Long id) {
-        /**
+        /*
          * TODO: Find the car by ID from the `repository` if it exists.
          *   If it does not exist, throw a CarNotFoundException
          */
+        Car car = repository.findById(id).orElseThrow(CarNotFoundException::new);
 
-
-        /**
+        /*
          * TODO: Delete the car from the repository.
          */
+        repository.delete(car);
 
+    }
 
+    /**
+     * Gets a vehicle location from the boogle map, given lat and lon.
+     * @param latitude and longitude of the location for which to get the location
+     * @return location
+     *   error message that the location is invalid
+     */
+    public Location getLocation(double latitude, double longitude ) {
+        try {
+            return webClient
+                    .get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("maps/")
+                            .queryParam("lat", latitude)
+                            .queryParam("lon", longitude )
+                            .build()
+                    )
+                    .retrieve().bodyToMono(Location.class).block();
+
+        } catch (Exception e) {
+            log.error("Unexpected error retrieving location", e);
+        }
+        return null;
     }
 }
